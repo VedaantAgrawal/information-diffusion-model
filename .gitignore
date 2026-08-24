@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+env/
+
+# Downloaded data (regeneratable via 01_data_pipeline.py)
+data/
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/
+
+# Personal notes (never push)
+claude_code_prompts.md
