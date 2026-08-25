@@ -47,7 +47,19 @@ def load_events(csv_path: str) -> pd.DataFrame:
     if missing_cols:
         raise ValueError(f"events.csv is missing required column(s): {sorted(missing_cols)}")
 
-    computed_mask = df["surprise_pct"].isna() & df["actual_eps"].notna() & df["expected_eps"].notna()
+    # expected_eps == 0 is excluded here on purpose: a percentage surprise
+    # off a zero base is undefined (division by zero -> +/-inf), and an
+    # inf slipping into surprise_pct would silently poison every
+    # downstream average and regression it touches (the whole Part 6
+    # calibration), not just this one event. Leaving surprise_pct as NaN
+    # in that case routes it through the ordinary "missing surprise_pct"
+    # skip-with-warning path in 04_event_study.py instead.
+    computed_mask = (
+        df["surprise_pct"].isna()
+        & df["actual_eps"].notna()
+        & df["expected_eps"].notna()
+        & (df["expected_eps"] != 0)
+    )
     df.loc[computed_mask, "surprise_pct"] = (
         (df.loc[computed_mask, "actual_eps"] - df.loc[computed_mask, "expected_eps"])
         / df.loc[computed_mask, "expected_eps"].abs()
@@ -118,17 +130,32 @@ def locate_event_index(merged_df: pd.DataFrame, event_date: str):
     return int(candidates[0])
 
 
+def _estimation_window_bounds(day0_idx: int) -> tuple:
+    """
+    Row-position bounds [start, end) of the beta estimation window for a
+    given event's day0_idx — shared by validate_data_sufficiency and
+    estimate_beta so the two can never drift out of sync with each other.
+    """
+    estimation_end = day0_idx - config.ESTIMATION_BUFFER_DAYS
+    estimation_start = estimation_end - config.ESTIMATION_WINDOW_DAYS
+    return estimation_start, estimation_end
+
+
 def validate_data_sufficiency(merged_df: pd.DataFrame, day0_idx: int) -> tuple:
     """
     Check that there's enough aligned price history around day0_idx to
-    both estimate beta (Part 2) and compute the long-window CAR (Part 3).
+    both estimate beta (Part 2) and compute AR/CAR (Part 3) over BOTH
+    configured windows.
+
+    Bounds are derived from the min/max offset across SHORT_WINDOW and
+    LONG_WINDOW rather than assuming one is a subset of the other, so this
+    stays correct even if config.py's window sizes are changed later.
 
     Returns (True, "") if sufficient, or (False, reason) if not — callers
     are expected to skip the event with a warning on failure, never crash
     the whole run over one bad event (see PART 1 of the handoff prompt).
     """
-    estimation_end = day0_idx - config.ESTIMATION_BUFFER_DAYS
-    estimation_start = estimation_end - config.ESTIMATION_WINDOW_DAYS
+    estimation_start, _ = _estimation_window_bounds(day0_idx)
 
     if estimation_start < 1:
         # Row 0's return is NaN (nothing to diff against), so the
@@ -138,16 +165,16 @@ def validate_data_sufficiency(merged_df: pd.DataFrame, day0_idx: int) -> tuple:
             f"estimation window ending {config.ESTIMATION_BUFFER_DAYS} days before the event"
         )
 
-    long_start = day0_idx + config.LONG_WINDOW[0]
-    long_end = day0_idx + config.LONG_WINDOW[1]
+    earliest_offset = min(config.SHORT_WINDOW[0], config.LONG_WINDOW[0])
+    latest_offset = max(config.SHORT_WINDOW[1], config.LONG_WINDOW[1])
 
-    if long_start < 1:
-        return False, "long window's start offset falls before the start of available price history"
+    if day0_idx + earliest_offset < 1:
+        return False, "the earlier of the two event windows starts before the start of available price history"
 
-    if long_end >= len(merged_df):
+    if day0_idx + latest_offset >= len(merged_df):
         return False, (
-            f"not enough post-event history for the long window "
-            f"(need data through day {config.LONG_WINDOW[1]} after the event)"
+            f"not enough post-event history for the later of the two event windows "
+            f"(need data through day {latest_offset} after the event)"
         )
 
     return True, ""
@@ -169,8 +196,7 @@ def estimate_beta(merged_df: pd.DataFrame, day0_idx: int) -> dict:
     estimate — and therefore every abnormal return computed from it — is
     less trustworthy. Downstream reports must not bury this number.
     """
-    estimation_end = day0_idx - config.ESTIMATION_BUFFER_DAYS
-    estimation_start = estimation_end - config.ESTIMATION_WINDOW_DAYS
+    estimation_start, estimation_end = _estimation_window_bounds(day0_idx)
 
     window = merged_df.iloc[estimation_start:estimation_end]
     x = window["index_ret"].to_numpy()

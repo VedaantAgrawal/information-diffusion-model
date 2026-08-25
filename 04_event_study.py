@@ -37,6 +37,7 @@ USAGE:
 """
 
 import argparse
+import math
 import os
 
 import matplotlib
@@ -276,8 +277,12 @@ def run(events_csv_path: str, output_dir: str) -> None:
         event_date = event["event_date"]
         surprise_pct = event["surprise_pct"]
 
-        if pd.isna(surprise_pct):
-            print(f"  [WARN] {ticker} {event_date}: no surprise_pct (and no actual/expected EPS to compute it from) — skipping.")
+        # Guards both "genuinely missing" (NaN) and the pathological case
+        # of an infinite surprise_pct (e.g. a would-be division by a zero
+        # expected_eps) — either would otherwise flow into the Part 6
+        # regression/bucket averages and silently poison them.
+        if pd.isna(surprise_pct) or not math.isfinite(surprise_pct):
+            print(f"  [WARN] {ticker} {event_date}: no usable surprise_pct (missing or non-finite) — skipping.")
             continue
 
         stock_df = esu.load_price_series(conn, ticker)

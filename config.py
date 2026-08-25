@@ -114,15 +114,15 @@ DEFAULT_START_DATE = "2019-01-01"
 # surprises were of magnitude X, how big was the historical price
 # reaction Y" — an actuarial-style historical average, not a forecast.
 
-# Where the hand-researched event list lives, and where every output
-# (per-event charts/summaries, the combined results CSV, and the Part 6
-# calibration report) gets written. Centralized here for the same reason
-# as everything else in this file: one place to change if you want to
-# reorganize the project layout.
+# Where the hand-researched event list lives, and the default output
+# directory for every report (per-event charts/summaries, the combined
+# results CSV, and the Part 6 calibration report) — both overridable on
+# the command line via --events / --output-dir (see 04_event_study.py).
+# The events/ subfolder and file names within output_dir are fixed by
+# 04_event_study.py itself, since they're relative to whatever
+# --output-dir is passed, not to a hardcoded absolute path.
 EVENTS_CSV_PATH = os.path.join(PROJECT_ROOT, "events.csv")
 REPORTS_DIR = os.path.join(PROJECT_ROOT, "reports")
-EVENT_REPORTS_DIR = os.path.join(REPORTS_DIR, "events")
-EVENT_RESULTS_CSV = os.path.join(REPORTS_DIR, "event_results.csv")
 
 # Which row of index_prices to regress each stock's returns against when
 # estimating beta (the market model needs ONE benchmark; NIFTY 50 is the
