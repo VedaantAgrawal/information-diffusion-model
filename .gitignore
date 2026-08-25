@@ -5,8 +5,13 @@ __pycache__/
 venv/
 env/
 
-# Downloaded data (regeneratable via 01_data_pipeline.py)
-data/
+# Regeneratable sanity-check summaries (not the source of truth — the DB is)
+data/equity_summary.csv
+data/index_summary.csv
+
+# NOTE: data/market_data.db is intentionally NOT ignored — it is the
+# whole point of this project and gets committed to the repo by the
+# GitHub Actions workflows in .github/workflows/. See README.md.
 
 # OS / editor
 .DS_Store

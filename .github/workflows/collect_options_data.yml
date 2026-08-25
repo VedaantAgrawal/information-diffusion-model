@@ -1,0 +1,64 @@
+name: Collect Options Chain Snapshots
+
+# WHY THIS SCHEDULE:
+# NSE market hours are 9:15 AM - 3:30 PM IST, Monday-Friday.
+# IST is UTC+5:30, so that window is roughly 3:45 - 10:00 UTC.
+# We run every 30 minutes across a slightly wider UTC band (3:00-10:59)
+# so we don't miss the open/close edges due to cron's minute-granularity
+# and GitHub's scheduling jitter (see README.md for more on why GitHub's
+# free-tier scheduled runs aren't perfectly on-time). Runs that happen to
+# fire outside actual market hours will simply fail to fetch a live
+# chain and skip cleanly (see the "no changes to commit" step below) —
+# that's expected, not an error.
+#
+# '*/30 3-10 * * 1-5' = every 30 minutes, during hours 3-10 UTC, Mon-Fri.
+on:
+  schedule:
+    - cron: '*/30 3-10 * * 1-5'
+  workflow_dispatch:  # allows manual "Run workflow" button in the Actions tab
+
+# Needed so this workflow can commit the updated database back to the
+# repo using the automatically-provided GITHUB_TOKEN — no secrets to
+# configure manually.
+permissions:
+  contents: write
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Pull latest changes
+        # Both workflows write to the SAME data/market_data.db file. If
+        # the daily price workflow (or another run of this workflow)
+        # committed in between our checkout and now, this makes sure we
+        # append to the latest version rather than an out-of-date copy,
+        # reducing (though not eliminating) the chance of a conflicting
+        # push later. See README.md for more on this tradeoff.
+        run: git pull --rebase origin main
+
+      - name: Run options chain collector
+        run: python 03_options_chain.py
+
+      - name: Commit and push snapshot if there is new data
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/market_data.db
+          if git diff --staged --quiet; then
+            echo "No new snapshot data (e.g. every symbol's fetch failed this run, likely outside market hours). Skipping commit."
+            exit 0
+          fi
+          git commit -m "Add options chain snapshot $(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          git pull --rebase origin main
+          git push
