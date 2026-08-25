@@ -9,6 +9,10 @@ env/
 data/equity_summary.csv
 data/index_summary.csv
 
+# Phase 1 event-study outputs — regeneratable from events.csv + market_data.db
+# by running 04_event_study.py, so not committed.
+reports/
+
 # NOTE: data/market_data.db is intentionally NOT ignored — it is the
 # whole point of this project and gets committed to the repo by the
 # GitHub Actions workflows in .github/workflows/. See README.md.

@@ -1,0 +1,9 @@
+ticker,event_date,event_type,actual_eps,expected_eps,surprise_pct,notes
+TCS.NS,2023-01-09,earnings,11.32,11.09,,"PLACEHOLDER - illustrative actual/expected EPS for pipeline testing. Replace with real consensus estimate + actual EPS researched from Moneycontrol/Economic Times/Business Standard coverage of this result date."
+INFY.NS,2023-04-13,earnings,15.45,16.9,,"PLACEHOLDER - illustrative figures (Infosys FY24 guidance miss was real news around this date, but the EPS numbers here are made up for pipeline testing). Replace with researched actual/consensus EPS."
+RELIANCE.NS,2023-07-21,earnings,,,4.0,"PLACEHOLDER - surprise_pct entered directly as a rough beat estimate (no clean actual/expected EPS pair researched yet). Replace with a real researched figure or actual/expected EPS pair."
+HDFCBANK.NS,2023-10-14,earnings,,,-1.2,"PLACEHOLDER - surprise_pct entered directly as a rough in-line/slight-miss estimate. Replace with a real researched figure."
+ICICIBANK.NS,2023-10-21,earnings,10.71,10.03,,"PLACEHOLDER - illustrative actual/expected EPS for pipeline testing. Replace with researched figures."
+SBIN.NS,2023-11-04,earnings,,,-12.3,"PLACEHOLDER - surprise_pct entered directly as a rough large-miss estimate. Replace with a real researched figure."
+MARUTI.NS,2023-10-27,earnings,106.5,103.1,,"PLACEHOLDER - illustrative actual/expected EPS for pipeline testing. Replace with researched figures."
+ITC.NS,2023-11-03,earnings,,,1.0,"PLACEHOLDER - surprise_pct entered directly as a rough in-line/slight-beat estimate. Replace with a real researched figure."

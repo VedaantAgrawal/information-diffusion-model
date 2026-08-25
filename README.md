@@ -336,3 +336,8 @@ information —
 Everything Phase 1 needs — years of clean daily price history, and a
 growing intraday options snapshot history — is what this repo (Phase 0)
 exists to build.
+
+**Phase 1 is now built** — see [README_phase1.md](README_phase1.md) for
+the event-study engine (`04_event_study.py`) that implements the first
+half of this: a market-model event study of equity price reactions to
+earnings surprises, calibrated (not predictive) by design.

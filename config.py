@@ -105,3 +105,77 @@ OPTIONS_SYMBOLS = ["NIFTY", "BANKNIFTY"]
 # it always starts from the same point unless you explicitly override it
 # with --start on the command line.
 DEFAULT_START_DATE = "2019-01-01"
+
+# ---------------------------------------------------------------------------
+# Phase 1 — Event study engine (market-model event study + PEAD calibration)
+# ---------------------------------------------------------------------------
+# See PHASE_1_HANDOFF_PROMPT.md and README_phase1.md for the full framing:
+# this is NOT a predictive model. It calibrates "when past earnings
+# surprises were of magnitude X, how big was the historical price
+# reaction Y" — an actuarial-style historical average, not a forecast.
+
+# Where the hand-researched event list lives, and where every output
+# (per-event charts/summaries, the combined results CSV, and the Part 6
+# calibration report) gets written. Centralized here for the same reason
+# as everything else in this file: one place to change if you want to
+# reorganize the project layout.
+EVENTS_CSV_PATH = os.path.join(PROJECT_ROOT, "events.csv")
+REPORTS_DIR = os.path.join(PROJECT_ROOT, "reports")
+EVENT_REPORTS_DIR = os.path.join(REPORTS_DIR, "events")
+EVENT_RESULTS_CSV = os.path.join(REPORTS_DIR, "event_results.csv")
+
+# Which row of index_prices to regress each stock's returns against when
+# estimating beta (the market model needs ONE benchmark; NIFTY 50 is the
+# broad-market proxy — BANKNIFTY is a sector index, not a market proxy,
+# so it isn't used here even though we collect it in Phase 0).
+MARKET_INDEX_NAME = "NIFTY50"
+
+# --- Part 2: beta estimation window --------------------------------------
+# ~250 trading days (~1 trading year) is the conventional estimation
+# window length in the event-study literature (Brown & Warner and most
+# published studies that followed them). The buffer keeps the window from
+# running right up to the event: if a stock starts drifting in ANTICIPATION
+# of an earnings beat/miss a few weeks early (which happens), including
+# those days in the beta estimate would contaminate alpha/beta with the
+# very effect we're trying to measure. 30 trading days (~6 weeks) of
+# buffer is a common, if somewhat arbitrary, choice — feel free to tune it.
+ESTIMATION_WINDOW_DAYS = 250
+ESTIMATION_BUFFER_DAYS = 30
+
+# --- Part 3: event windows -------------------------------------------------
+# Both are (start_offset, end_offset) in TRADING days relative to the
+# event day (day 0 = the first trading day on/after event_date — see
+# event_study_utils.locate_event_index for why "on/after" rather than
+# an exact match).
+#
+# SHORT_WINDOW captures the immediate reaction most classic event studies
+# stop at. LONG_WINDOW exists because Indian-market PEAD research finds
+# that stock prices keep drifting in the direction of the surprise for
+# weeks after the immediate reaction — a short window alone would miss
+# that drift entirely. Comparing CAR at the end of each window (Part 4)
+# is how we measure how much of the total reaction happened AFTER the
+# first few days.
+SHORT_WINDOW = (-2, 5)
+LONG_WINDOW = (-2, 40)
+
+# --- Part 4: "days to stabilize" diffusion-speed metric --------------------
+# CAR is considered "stabilized" once it stays within STABILIZE_PCT_THRESHOLD
+# (as a fraction of the window's final CAR value) for at least
+# STABILIZE_CONSECUTIVE_DAYS consecutive trading days. Both are
+# deliberately configurable constants, not hardcoded magic numbers, since
+# "how close is close enough" is a judgment call worth being able to tune
+# without touching the computation code.
+STABILIZE_PCT_THRESHOLD = 0.10
+STABILIZE_CONSECUTIVE_DAYS = 3
+
+# --- Part 6: surprise-magnitude buckets ------------------------------------
+# Fixed bands rather than quintiles. With a small, hand-entered event
+# count (this phase realistically starts with single-digit-to-low-dozens
+# of events), quintiles would put ~1-2 events per bucket and the
+# boundaries would shift every time an event is added, making buckets
+# hard to compare across runs. Fixed, interpretable bands are more robust
+# at small sample sizes; once the event list grows into the hundreds,
+# switching to quintiles (the more academically standard approach) would
+# make sense — see the note in event_study_utils.bucket_events.
+SURPRISE_BUCKET_EDGES = [-float("inf"), -10, -3, 3, 10, float("inf")]
+SURPRISE_BUCKET_LABELS = ["< -10%", "-10% to -3%", "-3% to +3%", "+3% to +10%", "> +10%"]
