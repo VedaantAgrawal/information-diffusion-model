@@ -190,21 +190,46 @@ forward), the realistic paid options are:
   Connect** or **Upstox** (requires an active trading account with that
   broker)
 
-**A related, separate risk worth knowing about:** NSE's website actively
-blocks a lot of non-browser / datacenter traffic (bot detection). In
-testing this repo, requests from a cloud/sandboxed environment were
-blocked outright (an HTTP 403 on the homepage, and a fake "Resource not
-found" response on the actual API call) even during NSE market hours.
-**GitHub Actions runners are themselves cloud/datacenter IPs**, so it is
-possible `collect_options_data.yml` will sometimes (or consistently) get
-blocked the same way, in addition to the expected "run happened outside
-market hours" case. Both scripts already treat this the same way as any
-other fetch failure — log a warning, skip that symbol, don't touch the
-database — so a blocked run degrades gracefully rather than corrupting
-anything. If you find the workflow is *never* successfully collecting
-data, try running `python 03_options_chain.py` manually from your own
-machine during market hours first to confirm it works at all from a
-residential/non-cloud IP before debugging the workflow itself.
+**A related, separate risk worth knowing about — and, as of this
+writing, an ACTIVE problem, not just a theoretical one:** NSE's website
+sits behind Akamai's bot-detection product, which blocks non-browser /
+datacenter-looking traffic. As of August 2026, **every single run** of
+`collect_options_data.yml` since it was turned on (13/13, spanning the
+full market-hours window, not just outside-hours runs) has been blocked
+— `option_chain_snapshots` is still empty. This was diagnosed directly,
+not assumed: the very first request in the fetch sequence (a plain GET
+to `https://www.nseindia.com`) comes back **HTTP 403**, and a follow-up
+test using a full headless Chromium browser (via Playwright — capable of
+running NSE's JS bot-challenge, unlike a bare `requests` call) got
+blocked too (connection timeout / protocol error on the same homepage
+request). That second result is the important one: it means this isn't
+a simple "add the right header" or "run a real browser instead of a
+script" fix — something at the network/IP level is rejecting the
+connection before NSE's page logic even runs.
+
+`03_options_chain.py`'s `fetch_raw_chain()` now surfaces the *actual*
+HTTP status code and failure reason in its `[WARN]` log line (e.g. "HTTP
+403"), rather than the older, vaguer "empty/unexpected response" message
+— nsepython's own `nsefetch()` silently swallows the real error into an
+empty `{}`, which was hiding this diagnosis. Both scripts still treat
+any fetch failure the same way as before — log a warning, skip that
+symbol, don't touch the database — so a blocked run degrades gracefully
+rather than corrupting anything.
+
+**Recommendation: don't sink further engineering effort into working
+around this specific block.** Chasing an actively-defended anti-bot
+system (rotating proxies, browser fingerprint spoofing, CAPTCHA solving)
+is a real arms race with no stable endpoint, and disproportionate for a
+personal research project against a general-purpose retail data page. If
+you need this data reliably, the two options already listed above are
+the ones actually worth pursuing — in particular, a **broker API with
+market data entitlements (Zerodha Kite Connect, Upstox)** is the more
+robust long-term path, since it's a legitimate, authorized data channel
+rather than a scrape that has to keep re-winning a fight NSE is actively
+trying to win. If you want to sanity-check whether the block ever lifts
+(e.g. NSE loosens it, or you're testing from a different network),
+`python 03_options_chain.py`'s `[WARN]` output will now tell you plainly
+whether you're still seeing an HTTP 403/block versus some other failure.
 
 ---
 

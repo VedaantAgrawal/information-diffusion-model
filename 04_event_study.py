@@ -282,23 +282,23 @@ def run(events_csv_path: str, output_dir: str) -> None:
         # expected_eps) — either would otherwise flow into the Part 6
         # regression/bucket averages and silently poison them.
         if pd.isna(surprise_pct) or not math.isfinite(surprise_pct):
-            print(f"  [WARN] {ticker} {event_date}: no usable surprise_pct (missing or non-finite) — skipping.")
+            print(f"  [WARN] {ticker} {event_date}: no usable surprise_pct (missing or non-finite) - skipping.")
             continue
 
         stock_df = esu.load_price_series(conn, ticker)
         if stock_df.empty:
-            print(f"  [WARN] {ticker} {event_date}: no equity_prices rows for this ticker — skipping.")
+            print(f"  [WARN] {ticker} {event_date}: no equity_prices rows for this ticker - skipping.")
             continue
 
         merged = esu.build_aligned_returns(stock_df, index_df)
         day0_idx = esu.locate_event_index(merged, event_date)
         if day0_idx is None:
-            print(f"  [WARN] {ticker} {event_date}: event date is after the latest price data we have — skipping.")
+            print(f"  [WARN] {ticker} {event_date}: event date is after the latest price data we have - skipping.")
             continue
 
         ok, reason = esu.validate_data_sufficiency(merged, day0_idx)
         if not ok:
-            print(f"  [WARN] {ticker} {event_date}: {reason} — skipping.")
+            print(f"  [WARN] {ticker} {event_date}: {reason} - skipping.")
             continue
 
         beta_info = esu.estimate_beta(merged, day0_idx)
@@ -335,7 +335,7 @@ def run(events_csv_path: str, output_dir: str) -> None:
     conn.close()
 
     if not result_rows:
-        print("\nNo events produced results — nothing to write for the combined calibration report.")
+        print("\nNo events produced results - nothing to write for the combined calibration report.")
         return
 
     results_df = pd.DataFrame(result_rows)

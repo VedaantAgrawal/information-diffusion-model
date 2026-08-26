@@ -44,20 +44,70 @@ import time
 from datetime import datetime, timezone
 
 import pandas as pd
-from nsepython import nse_optionchain_scrapper
+import requests
+from nsepython import headers as NSE_HEADERS
+from nsepython import nsesymbolpurify
 
 import config
 import db_utils
 
 
+class NseFetchError(Exception):
+    """Raised by fetch_raw_chain with a specific, actionable reason (HTTP status code, etc)."""
+
+
 def fetch_raw_chain(symbol: str) -> dict:
     """
-    Pull the live option chain JSON for one symbol (e.g. "NIFTY") from
-    NSE via nsepython. Raises on failure — the caller decides how to
+    Pull the live option chain JSON for one symbol (e.g. "NIFTY") from NSE.
+
+    WHY THIS DOESN'T JUST CALL nsepython.nse_optionchain_scrapper():
+    that function's underlying nsefetch() catches every JSON-decode
+    failure and silently returns {} — it throws away the actual HTTP
+    status code and response body, which is exactly the information
+    needed to tell "NSE is rate-limiting us" apart from "we're outside
+    market hours" apart from "NSE/Akamai is blocking this network
+    outright" (see the "options data limitation" section of README.md).
+    We replicate nsepython's own request sequence (visit the homepage,
+    then the option-chain page, to pick up session cookies, then hit the
+    JSON API) using its same headers/symbol-purification helpers, but
+    check each response's status code ourselves and raise NseFetchError
+    with that status code instead of masking it.
+
+    Raises NseFetchError on any failure — the caller decides how to
     handle that (log + skip, so one symbol's failure doesn't kill the
     whole run).
     """
-    return nse_optionchain_scrapper(symbol)
+    symbol = nsesymbolpurify(symbol)
+    endpoint = f"https://www.nseindia.com/api/option-chain-indices?symbol={symbol}"
+
+    session = requests.Session()
+    for priming_url in ("https://www.nseindia.com", "https://www.nseindia.com/option-chain"):
+        try:
+            resp = session.get(priming_url, headers=NSE_HEADERS, timeout=10)
+        except requests.RequestException as exc:
+            raise NseFetchError(f"network error reaching {priming_url}: {exc}") from exc
+        if resp.status_code != 200:
+            raise NseFetchError(
+                f"priming request to {priming_url} returned HTTP {resp.status_code} (expected 200) - "
+                f"most likely NSE/Akamai blocking this network's outbound IP outright, not a rate-limit "
+                f"or an outside-market-hours case. See README.md's 'options data limitation' section."
+            )
+
+    try:
+        resp = session.get(endpoint, headers=NSE_HEADERS, timeout=10)
+    except requests.RequestException as exc:
+        raise NseFetchError(f"network error reaching {endpoint}: {exc}") from exc
+
+    if resp.status_code != 200:
+        raise NseFetchError(f"option-chain API request returned HTTP {resp.status_code} (expected 200)")
+
+    try:
+        return resp.json()
+    except ValueError as exc:
+        raise NseFetchError(
+            f"option-chain API returned HTTP 200 but the body wasn't valid JSON - likely an HTML "
+            f"challenge/block page served instead of data ({exc})"
+        ) from exc
 
 
 def flatten_chain(symbol: str, raw: dict, pulled_at_utc: str) -> pd.DataFrame:
